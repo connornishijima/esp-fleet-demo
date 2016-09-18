@@ -6,14 +6,16 @@
 #include <Ticker.h>
 #include "FS.h"
 #include <ArduinoJson.h>
+#include <ESP8266httpUpdate.h>
+
+String firmware_version = "0.0.2";
 
 String vendor_id = "1234";
 String product_id = "5678";
-String firmware_version = "0.0.1";
 String chip_id = "123456_7890";
 
 char* api_host = "api.espfleet.com";
-String api_url = "/v1/check_in/"+vendor_id+"/"+product_id+"/"+chip_id+"/"+firmware_version;
+String api_url = "/v1/check_in/" + vendor_id + "/" + product_id + "/" + chip_id + "/" + firmware_version;
 
 const byte statusPin = 4;
 Ticker blinker;
@@ -115,10 +117,25 @@ void fleetCheck(char* host, String url) {
     Serial.println("parseObject() failed");
     return;
   }
-
-  const char* server_version = root["server_version"];
-  if(server_version != firmware_version){
-    Serial.println("UPDATE NEEDED ------------!");
+  else {
+    const char* update_status = root["status"];
+    const char* binary_host = root["binary_host"];
+    const char* binary_latest = root["binary_latest"];
+    if (String(update_status) != String("good")) {
+      Serial.println("UPDATE NEEDED ------------!");
+      t_httpUpdate_return ret = ESPhttpUpdate.update(binary_latest);
+      switch (ret) {
+        case HTTP_UPDATE_FAILED:
+          Serial.printf("HTTP_UPDATE_FAILD Error (%d): %s", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
+          break;
+        case HTTP_UPDATE_NO_UPDATES:
+          Serial.println("[update] Update no Update.");
+          break;
+        case HTTP_UPDATE_OK:
+          Serial.println("[update] Update ok."); // may not called we reboot the ESP
+          break;
+      }
+    }
   }
 }
 
@@ -150,7 +167,7 @@ void fleetConnect() {
     ESP.restart();
   }
   statusWrite(0, 255, 255, 100);
-  fleetCheck(api_host,api_url);
+  fleetCheck(api_host, api_url);
   statusWrite(0, 255, 255);
   statusFadeOut();
   otaSetup();
@@ -182,12 +199,14 @@ void otaSetup() {
 
 void setup() {
   Serial.begin(115200);
+  Serial.setDebugOutput(true);
   fleetConnect();
+  Serial.println("NEW VERSION!")
 }
 
 void loop() {
-  if(millis() % 5000 == 0){
-    fleetCheck(api_host,api_url);
+  if (millis() % 5000 == 0) {
+    fleetCheck(api_host, api_url);
   }
   ArduinoOTA.handle();
 }
