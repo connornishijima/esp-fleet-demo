@@ -201,7 +201,7 @@ void setup() {
   Serial.begin(115200);
   Serial.setDebugOutput(true);
   fleetConnect();
-  Serial.println("NEW VERSION!")
+  Serial.println("NEW VERSION!");
 }
 
 void loop() {
